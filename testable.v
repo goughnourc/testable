@@ -95,13 +95,40 @@ Qed.
 Inductive test {TT : Type} : TT -> Prop -> Type := mktest : forall t, forall P, test t P.
 *)
 
+(* Let's try an example or two. *)
+Definition example_1 := forall P : Prop, P -> P.
+
+Definition t_ex1 : testable example_1.
+  apply t_all. intro P. apply t_impl. intro HP. apply t_prim.
+Defined.
+
+Definition ts_ex1 : test_strategy example_1 t_ex1.
+  unfold example_1. apply ts_all. intros P. apply ts_impl.
+  intros HP. apply ts_prove. apply HP.
+Defined.
+
+(*
+Compute proven ts_ex1.
+(* forall x : Prop, x -> x *)
+*)
+
+(*
+Compute assumed ts_ex1.
+(* forall x : Prop, x -> True *)
+*)
+(* We don't need any hypotheses to prove (assumed ts_ex1) *)
+Theorem ts_ex1_assumed_trivial : assumed ts_ex1.
+  simpl. intros _ _. constructor.
+Qed.
+
+Theorem ts_ex1_correct : example_1.
+  apply (test_strategy_correct _ _ ts_ex1).
+  apply ts_ex1_assumed_trivial.
+Qed.
+
+
 (* TODO: reimplement examples using test_strategy *)
 (*
-(* Let's try an example or two. *)
-Definition example_1 : testable (forall P : Prop, P -> P).
-  eapply t_all. intro P. 
-  eapply t_proof. 
-Defined.
 
 Inductive Dummy : Set := dummy : Dummy.
 Definition magic_test := (fun Q : Prop => mktest dummy Q).

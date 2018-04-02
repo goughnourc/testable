@@ -1,0 +1,4 @@
+Recreate existing examples.
+Parametrize ts_test constructor with a test of the Prop in question.
+How can I add test types after the fact? Should test be a module?
+  Reference how Tuple is a subtypeof seq in the math-comp book (6.1, p. 156)

@@ -126,23 +126,44 @@ Theorem ts_ex1_correct : example_1.
   apply ts_ex1_assumed_trivial.
 Qed.
 
+Definition example_2 := forall P Q : Prop, P -> Q /\ P.
 
-(* TODO: reimplement examples using test_strategy *)
-(*
-
-Inductive Dummy : Set := dummy : Dummy.
-Definition magic_test := (fun Q : Prop => mktest dummy Q).
-
-Definition example_2 : testable (forall P Q : Prop, P -> Q /\ P).
-  apply t_all. intro P.
-  apply t_all. intro Q.
-  apply t_impl.
-  - apply t_proof.
-  - apply t_and.
-    + apply (t_test _ _ _ (magic_test Q)).
-    + apply t_proof.
+Definition t_ex2 : testable example_2.
+  apply t_all. intros P. apply t_all. intros Q.
+  apply t_impl. intros HP. apply t_and; apply t_prim.
 Defined.
 
+Definition ts_ex2 : test_strategy example_2 t_ex2.
+  apply ts_all. intros P. apply ts_all. intros Q.
+  apply ts_impl. intros HP. apply ts_and.
+  - (* Clearly, we don't have a way to prove Q. *) apply ts_test.
+  - apply ts_prove. apply HP.
+Defined.
+
+(*
+Compute proven ts_ex2.
+(* forall x : Prop, Prop -> x -> True /\ x *)
+
+Compute assumed ts_ex2.
+(* forall x x0 : Prop, x -> x0 /\ True *)
+*)
+(* Unfortunately, our assumption will be hard to prove. *)
+Theorem ts_ex2_assumed_false : ~(assumed ts_ex2).
+  simpl. intros Hassumed. assert (False /\ True) as H.
+  - apply (Hassumed True). constructor.
+  - destruct H as [ HFalse _ ]. apply HFalse.
+Qed.
+
+(* We could just use exfalso, but let's try applying the correctness theorem anyway. *)
+Theorem ts_ex2_correct : assumed ts_ex2 -> example_2.
+  intros Hassumed.
+  apply (test_strategy_correct _ _ ts_ex2).
+  apply Hassumed.
+Qed.
+
+
+(* TODO: complete example_3 *)
+(*
 (* Try some thing like P x -> R (g (f x)) via P x -> Q (f x) and Q y -> R (g y) *)
 Section ex3.
   Variable A : Type.

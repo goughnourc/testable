@@ -84,7 +84,7 @@ End test_strategy.
 Arguments test_strategy {test} {prop_tested} P.
 Arguments proven {test} {prop_tested} {P} tsP.
 Arguments assumed {test} {prop_tested} {P} tsP.
-Arguments test_strategy_correct {test} {prop_tested} {P} tsP.
+Arguments test_strategy_correct {test} {prop_tested} {P} tsP Hassumed.
 
 (* Let's try an example or two. *)
 Definition example_1 := forall P : Prop, P -> P.

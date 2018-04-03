@@ -12,10 +12,15 @@ Inductive testable : Prop -> Type :=
 | t_exists : forall A, forall P : (A -> Prop), (forall a : A, testable (P a)) -> testable (exists a : A, P a)
 | t_impl : forall P Q : Prop, (P -> testable Q) -> testable (P -> Q).
 
+Section test_strategy.
+  Variable test : Type.
+  Variable prop_tested : test -> Prop.
+
+(* TODO: Fix indentation. *)
+(* TODO: Improve implicit and explicit arguments. It may be necessary to change the following constructors. *)
 Inductive test_strategy : Prop -> Type :=
 | ts_prove : forall P : Prop, P -> test_strategy P
-| ts_test : forall P, test_strategy P
-(* TODO: require a test of P as an argument *)
+| ts_test : forall t : test, test_strategy (prop_tested t)
 | ts_or_l : forall P Q, test_strategy P -> test_strategy (P \/ Q)
 | ts_or_r : forall P Q, test_strategy Q -> test_strategy (P \/ Q)
 | ts_and : forall P Q, test_strategy P -> test_strategy Q -> test_strategy (P /\ Q)
@@ -76,17 +81,22 @@ Proof.
     + apply HPimpQ. apply IHtsP2. apply HAtsP2.
 Qed.
 
-
-(* TODO: create a test type and make (ts_test P) require an argument of type (test P) *)
-(* That is, we can only assume something that we have some way to test. *)
-(*
-Inductive test {TT : Type} : TT -> Prop -> Type := mktest : forall t, forall P, test t P.
-*)
+End test_strategy.
+Arguments test_strategy {test} {prop_tested} P.
+Arguments proven {test} {prop_tested} {P} tsP.
+Arguments assumed {test} {prop_tested} {P} tsP.
+Arguments test_strategy_correct {test} {prop_tested} {P} tsP.
 
 (* Let's try an example or two. *)
 Definition example_1 := forall P : Prop, P -> P.
 
-Definition ts_ex1 : test_strategy example_1.
+Inductive ex1_test : Type :=. (* no tests are available *)
+
+Definition ex1_pt : ex1_test -> Prop.
+  intro t. inversion t.
+Defined.
+
+Definition ts_ex1 : (@test_strategy ex1_test ex1_pt example_1).
   unfold example_1. apply ts_all. intros P. apply ts_impl.
   intros HP. apply ts_prove. apply HP.
 Defined.
@@ -105,16 +115,25 @@ Theorem ts_ex1_assumed_trivial : assumed ts_ex1.
 Qed.
 
 Theorem ts_ex1_correct : example_1.
-  apply (test_strategy_correct _ ts_ex1).
+  apply (test_strategy_correct ts_ex1).
   apply ts_ex1_assumed_trivial.
 Qed.
 
 Definition example_2 := forall P Q : Prop, P -> Q /\ P.
 
-Definition ts_ex2 : test_strategy example_2.
+(* We pretend we can test arbitrary propositions. *)
+Inductive ex2_test : Type := ex2_test_any : Prop -> ex2_test.
+
+Definition ex2_pt (t : ex2_test) : Prop :=
+match t with
+| ex2_test_any P => P
+end.
+
+Definition ts_ex2 : @test_strategy ex2_test ex2_pt example_2.
   apply ts_all. intros P. apply ts_all. intros Q.
   apply ts_impl. intros HP. apply ts_and.
-  - (* Clearly, we don't have a way to prove Q. *) apply ts_test.
+  - (* Clearly, we don't have a way to prove Q. *) 
+    apply (@ts_test ex2_test ex2_pt (ex2_test_any Q)).
   - apply ts_prove. apply HP.
 Defined.
 
@@ -136,11 +155,11 @@ Qed.
 (* We could just use exfalso, but let's try applying the correctness theorem anyway. *)
 Theorem ts_ex2_correct : assumed ts_ex2 -> example_2.
   intros Hassumed.
-  apply (test_strategy_correct _ ts_ex2).
+  apply (test_strategy_correct ts_ex2).
   apply Hassumed.
 Qed.
 
-(* Try something like P x -> R (g (f x)) via P x -> Q (f x) and Q y -> R (g y) *)
+(* Try to test P x -> R (g (f x)) by testing P x -> Q (f x) and Q y -> R (g y) *)
 Section ex3.
   Variable A : Type.
   Variable B : Type.
@@ -153,11 +172,23 @@ Section ex3.
 
   Definition example_3 := forall a, P a -> R (g (f a)).
 
-  Definition ts_ex3 : test_strategy example_3.
-    apply (ts_mp ((forall a:A, P a -> Q (f a)) /\ (forall b:B, Q b -> R (g b)))).
+  Inductive ex3_test : Type :=
+  | ex3_t1 : ex3_test
+  | ex3_t2 : ex3_test.
+
+  Definition ex3_pt (t : ex3_test) : Prop :=
+  match t with
+  | ex3_t1 => forall a:A, P a -> Q (f a)
+  | ex3_t2 => forall b:B, Q b -> R (g b)
+  end.
+ 
+  Definition ts_ex3 : @test_strategy ex3_test ex3_pt example_3.
+    apply (@ts_mp _ _ ((forall a:A, P a -> Q (f a)) /\ (forall b:B, Q b -> R (g b)))).
     - apply ts_prove. intros Hand. destruct Hand as [ Hf Hg ]. unfold example_3. 
       auto.
-    - apply ts_and; apply ts_test.
+    - apply ts_and.
+      + apply (@ts_test ex3_test ex3_pt ex3_t1).
+      + apply (@ts_test ex3_test ex3_pt ex3_t2).
   Defined.
 
 (*
@@ -172,7 +203,7 @@ Compute assumed ts_ex3.
 
   (* TODO: add a hint or hints to make these proofs automatic? *)
   Theorem ts_ex3_correct : assumed ts_ex3 -> example_3.
-    intros HAts_ex3. apply (test_strategy_correct _ ts_ex3).
+    intros HAts_ex3. apply (test_strategy_correct ts_ex3).
     apply HAts_ex3.
   Qed.
 End ex3.

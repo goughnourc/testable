@@ -1,3 +1,0 @@
-Parametrize ts_test constructor with a test of the Prop in question.
-How can I add test types after the fact? Should test be a module?
-  Just make the test type a variable.

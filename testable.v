@@ -40,6 +40,12 @@ match lX with
 | prove_listable _ xs _ _ => xs
 end.
 
+Fixpoint flatten {X : Type} (l : list (list X)) : list X :=
+match l with
+| nil => nil
+| xs :: l' => xs ++ (flatten l')
+end.
+
 Section test_strategy.
   Variable test : Type.
   Variable prop_tested : test -> Prop.
@@ -123,12 +129,28 @@ Section test_strategy.
       + apply HPimpQ. apply IHtsP2. apply HAtsP2.
   Qed.
 
+  (* Given a strategy, create a list of the tests that must be run. *)
+  Fixpoint to_test {ht : has_tests} {P : Prop} (tsP : test_strategy ht P) : list test :=
+  match tsP with
+  | ts_prove _ _ => nil
+  | ts_test t =>  t :: nil
+  | ts_or_l _ _ _ tsP => to_test tsP
+  | ts_or_r _ _ _ tsQ => to_test tsQ
+  | ts_and _ _ _ _ tsP tsQ => (to_test tsP) ++ (to_test tsQ)
+  | ts_exists _ A _ _ tsPx => to_test tsPx
+  | ts_all A _ tsP' => nil (* Tests are disallowed in this case. *)
+  | ts_all_fin A lA _ _ tsP' => flatten (map (fun a => to_test (tsP' a)) (listable_to_list lA))
+  | ts_impl P' _ tsQ => nil (* Tests are disallowed in this case, too. *)
+  | ts_mp _ _ _ _ tsPimpQ tsP => (to_test tsPimpQ) ++ (to_test tsP)
+  end.
+
 End test_strategy.
 Print test_strategy.
 Arguments test_strategy {test} {prop_tested} ht P.
 Arguments proven {test} {prop_tested} {ht} {P} tsP.
 Arguments assumed {test} {prop_tested} {ht} {P} tsP.
 Arguments test_strategy_correct {test} {prop_tested} {ht} {P} tsP Hassumed.
+Arguments to_test {test} {prop_tested} {ht} {P} tsP.
 
 (* Let's try an example or two. *)
 Definition example_1 := forall P : Prop, P -> P.
@@ -150,6 +172,9 @@ Compute proven ts_ex1.
 
 Compute assumed ts_ex1.
 (* forall x : Prop, x -> True *)
+
+Compute to_test ts_ex1.
+(* nil *)
 *)
 
 (* We don't need any hypotheses to prove (assumed ts_ex1) *)
@@ -179,7 +204,7 @@ Definition ts_ex2 : @test_strategy ex2_test ex2_pt true example_2.
     + apply HP.
 Abort.
 (* There are more than a finite number of propositions to test, so we don't have
-   a way to test them all, even if an individual test could test any proposition. *)
+   a way to test them all, even if an individual test could test any particular proposition. *)
 (*
   - apply (@ts_test ex2_test ex2_pt (ex2_test_any Q)).
 Defined.
@@ -247,6 +272,9 @@ Compute proven ts_ex3.
 Compute assumed ts_ex3.
 (* True /\
        (forall x : A, P x -> Q (f x)) /\ (forall x : B, Q x -> R (g x)) *)
+
+Compute to_test ts_ex3.
+(* ex3_t1 :: ex3_t2 :: nil *)
 *)
 
   (* TODO: add a hint or hints to make these proofs automatic? *)

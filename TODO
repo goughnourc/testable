@@ -1,4 +1,5 @@
 Reorganize code. Separate it into test_strategy code, testable code, listable code and examples.
 Add an extraction example.
+Add an example using ts_fin_all.
 Add test code in ML.
 Add a non-trivial example.

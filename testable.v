@@ -1,6 +1,7 @@
 Require Import Coq.Bool.Bool.
 Require Import Coq.Arith.Arith.
 Require Import Coq.Lists.List.
+Import ListNotations.
 
 Module testable.
 
@@ -54,6 +55,7 @@ Definition PI (P : Prop) := forall p1 p2 : P, p1 = p2.
 
 Section test_strategy.
   Variable test : Type.
+  (* The proposition _claimed_ to be tested by running a test. *)
   Variable prop_tested : test -> Prop.
 
   (* We don't want test strategies that require running an infinite number of tests. *)
@@ -162,8 +164,116 @@ Section test_strategy.
   | ts_mp _ _ _ _ tsPimpQ tsP => (to_test tsPimpQ) ++ (to_test tsP)
   end.
 
-  (* TODO: Show that if every proposition to test holds then assumed holds. *)  
-  (* Definition coverage_complete ... *)
+  Fixpoint andl (Ps : list Prop) : Prop :=
+  match Ps with
+  | nil => True
+  | P :: Ps' => P /\ andl Ps'
+  end.
+
+  Definition props_tested (l : list test) : Prop := andl (map prop_tested l).
+
+  Lemma props_tested_append : forall l1 l2, props_tested (l1 ++ l2) <-> props_tested l1 /\ props_tested l2.
+  Proof.
+    unfold props_tested. induction l1; simpl.
+    - split; try auto.
+      + intros [ _ Hpt ]. auto.
+    - split.
+      + intros [ Hpta Hrest ]. assert (andl (map prop_tested l1) /\ andl (map prop_tested l2)) as Hand.
+        * apply IHl1. apply Hrest.
+        * destruct Hand as [ Hptl1 Hptl2 ]. auto.
+      + intros [ [ Hpta Hptl1 ] Hptl2 ]. split; try auto.
+        * apply IHl1. auto.
+  Qed.
+
+  Lemma orb_false : forall b1 b2, b1 || b2 = false -> b1 = false /\ b2 = false.
+  Proof.
+    destruct b1, b2; intuition.
+  Qed.
+
+  Lemma ht_false__to_test_nil : forall ht : has_tests, forall P, forall tsP : test_strategy ht P,
+    ht = false -> to_test tsP = nil.
+  Proof.
+    intros ht P tsP. remember tsP as ts eqn:Heqts. induction tsP;
+      try (intros Heqht; inversion Heqht);
+      try (subst; simpl; auto).
+    - apply orb_false in Heqht. destruct Heqht as [ HeqhtP HeqhtQ ].
+      assert (to_test tsP1 = nil /\ to_test tsP2 = nil) as Handeq.
+      + split.
+        * specialize (IHtsP1 tsP1). apply IHtsP1; auto.
+        * specialize (IHtsP2 tsP2). apply IHtsP2; auto.
+      + destruct Handeq as [ Heqtt1 Heqtt2 ]. rewrite Heqtt1. rewrite Heqtt2. auto.
+    - apply orb_false in Heqht. destruct Heqht as [ HeqhtPimpQ HeqhtQ ].
+      assert (to_test tsP1 = nil /\ to_test tsP2 = nil) as Handeq.
+      + split.
+        * specialize (IHtsP1 tsP1). apply IHtsP1; auto.
+        * specialize (IHtsP2 tsP2). apply IHtsP2; auto.
+      + destruct Handeq as [ Heqtt1 Heqtt2 ]. rewrite Heqtt1. rewrite Heqtt2. auto.
+  Qed.
+
+  Theorem separate_list : forall n : nat, forall X, forall l : list X, forall x : X,
+    nth n l = Some x -> exists l1 l2, l = l1 ++ [x] ++ l2.
+  Proof.
+    induction n.
+    - intros X l x Heq. destruct l; simpl in Heq; inversion Heq.
+      + exists nil, l. auto.
+    - intros X l x Heq. destruct l; simpl in Heq.
+      + inversion Heq.
+      + apply IHn in Heq. destruct Heq as [ l1' Heq' ]. destruct Heq' as [ l2' Heq'' ].
+        rewrite Heq''. exists (x0 :: l1'). exists l2'. auto.
+  Qed.
+
+  Theorem separate_listable : forall A, forall lA : listable A, forall a : A,
+    exists l1 l2, listable_to_list lA = l1 ++ [a] ++ l2.
+  Proof.
+    intros A lA a. destruct lA.
+    assert (listable_to_list (prove_listable X xs index index_correct) = xs) as Heq.
+    - auto.
+    - rewrite Heq. eapply separate_list. apply index_correct. auto.
+  Qed.
+
+  Theorem separate_props_tested: forall l1 l2 l3,
+    props_tested (flatten (l1 ++ l2 ++ l3)) -> props_tested (flatten l2).
+  Proof.
+    induction l1.
+    - simpl. induction l2.
+      + intros _ _. unfold props_tested. simpl. auto.
+      + intros l3 Hpt_a_l2.
+        simpl. apply props_tested_append.
+        simpl in Hpt_a_l2. apply props_tested_append in Hpt_a_l2.
+        destruct Hpt_a_l2 as [ Hpt_a Hpt_l2_l3 ]. split.
+        * auto.
+        * apply (IHl2 l3). auto.
+    - simpl. intros l2 l3. intros Hpt_a_all. apply props_tested_append in Hpt_a_all.
+      destruct Hpt_a_all as [ Hpt_a Hpt_all ]. apply IHl1 in Hpt_all. auto.
+  Qed.
+
+  (* If the proposition _claimed_ to be tested by each test in to_test holds then our assumptions hold. *)  
+  Theorem to_test_correct : forall ht : has_tests, forall P : Prop, forall tsP : test_strategy ht P,
+    props_tested (to_test tsP) -> assumed tsP.
+  Proof.
+    intros ht P tsP. induction tsP; simpl; try auto.
+    - unfold props_tested. simpl. intros [ Hpt _ ]. apply Hpt.
+    - intros Hpt_append. apply props_tested_append in Hpt_append.
+      destruct Hpt_append as [ Hpt_tsP1 Hpt_tsP2 ]. split.
+      + apply IHtsP1. apply Hpt_tsP1.
+      + apply IHtsP2. apply Hpt_tsP2.
+    - intros Hpt_tsP. exists x. apply IHtsP. apply Hpt_tsP.
+    - intros _ a. specialize (H a). apply H. assert (to_test (t a) = nil) as Heqtt.
+      + apply ht_false__to_test_nil. auto.
+      + rewrite Heqtt. unfold props_tested. simpl. auto.
+    - inversion lA. intros Hpt a. apply H.
+      assert (exists xs' xs'', listable_to_list lA = xs' ++ [a] ++ xs'') as Heqxs.
+      + apply separate_listable.
+      + destruct Heqxs as [xs' Heqxs']. destruct Heqxs' as [xs'' Heqxs''].
+        rewrite Heqxs'' in Hpt.
+        rewrite (@map_app A (list test)) in Hpt.
+        rewrite (@map_app A (list test)) in Hpt.
+        apply separate_props_tested in Hpt.
+        simpl in Hpt. rewrite app_nil_r in Hpt. auto.
+    - intros Hpt_app. apply props_tested_append in Hpt_app. destruct Hpt_app as [ Hpt1 Hpt2 ].
+      split; intuition.
+  Qed.
+    
 End test_strategy.
 Print test_strategy.
 Arguments test_strategy {test} {prop_tested} ht P.
